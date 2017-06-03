@@ -15,6 +15,7 @@ import json
 import random
 import signal
 import concurrent.futures
+import time
 from multiprocessing import Process
 SEED_EXIST          = True
 SEED_NO_EXIST       = False
@@ -210,55 +211,29 @@ if __name__ == '__main__':
       links = set([seed])
       
     while links != set():
-      with concurrent.futures.ProcessPoolExecutor(max_workers=150) as executor:
-        for url_links in executor.map(analyzing, links):
-          if url_links is None:
-            continue
-          """ leveldbに終わったリンクを保存 """
-          url, _links = url_links
-          db.put(bytes(url, "utf8"), bytes("finish", "utf8"))
+      try:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=250) as executor:
+          for url_links in executor.map(analyzing, links):
+            if url_links is None:
+              continue
+            """ leveldbに終わったリンクを保存 """
+            url, _links = url_links
+            db.put(bytes(url, "utf8"), bytes("finish", "utf8"))
 
-          """ 終わったリンクを破棄 """
-          links.remove(url)
-          """ linksバッファーをアップデート """
-          for _link in _links:
-            if db.get(bytes(_link, "utf8")) is None:
-              links.add(_link)
+            """ 終わったリンクを破棄 """
+            links.remove(url)
+            """ linksバッファーをアップデート """
+            for _link in _links:
+              if db.get(bytes(_link, "utf8")) is None:
+                links.add(_link)
+          
+            """ 非同期保存 """
+        p = Process(target=save_links, args=(links,))
+        p.start()
+      except urllib.error.URLError as e:
+        """ DNSがおかしくなるとこの例外が起きるらしい """
+        print(e)
+        time.sleep(2.)
         
-          """ 非同期保存 """
-      p = Process(target=save_links, args=(links,))
-      p.start()
 
-if mode == 'leveldump' or mode == 'localdump':
-  db = plyvel.DB('./tmp/pixiv_htmls', create_if_missing=True)
-  for k, raw in db:
-    if k == '___URLS___': continue
-      if raw[0] != '{': continue
-        v = json.loads(raw)
-        tags = v['tags']
-        tag_txt = ' '.join([x.encode('utf-8') for x in tags])
-        tag_txt = re.sub('【', '', tag_txt)
-        tag_txt = re.sub('】', '', tag_txt)
-        tag_txt = tag_txt.lower()
-        print(tag_txt)
 
-if mode == 'chaine':
-  db = plyvel.DB('./tmp/pixiv_htmls', create_if_missing=True)
-  for k, raw in [x for x in db]:
-    if k == '___URLS___': continue
-      if raw[0] != '{': continue
-        v = json.loads(raw)
-        tags = v['tags']
-        tag_txt = ' '.join([x.encode('utf-8') for x in tags])
-        tag_txt = re.sub('【', '', tag_txt)
-        tag_txt = re.sub('】', '', tag_txt)
-        tag_txt = tag_txt.lower()
-        #print(v)
-
-        linker = v['linker']
-        if not os.path.exists('tmp/' + linker):
-          print(linker + ' is not exists.' )
-          db.put(k, 'miss')
-        else:
-          print(linker + ' is exists.' )
-          os.system('mv tmp/'+ linker + ' cp/')
