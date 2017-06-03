@@ -117,7 +117,7 @@ def parse_img(url, imgurl, tagname):
       print("ゼロエラーです", imgurl)
       continue
     open('imgs/' + linker + '.jpg', 'wb').write(con)
-    open('metas/{}.json'.format(linker), "w").write( json.dumps({'linker':linker + '.jpg', 'tags': tagname }) )
+    open('metas/{}.json'.format(linker), "w").write( json.dumps({'linker':linker + '.jpg', 'tags': tagname, 'url':url, 'imgurl':imgurl }) )
     print("発見した画像", tagname, url, imgurl)
     break
 
