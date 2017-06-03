@@ -1,8 +1,6 @@
-
 import bs4
 import sys
 import urllib.request, urllib.error, urllib.parse
-import urllib.request, urllib.parse, urllib.error
 import http.client
 from socket import error as SocketError
 import ssl
@@ -12,11 +10,12 @@ import multiprocessing as mp
 import datetime
 import pickle as pickle
 import plyvel
-import pickle as pickle
 import re
 import json
 import random
 import signal
+import concurrent.futures
+from multiprocessing import Process
 SEED_EXIST          = True
 SEED_NO_EXIST       = False
 # set default state to scrape web pages in Amazon Kindle
@@ -41,37 +40,37 @@ def makeCookie(name, value):
         rest=None
     )
 def html_adhoc_fetcher(url):
-    """ 
-    標準のアクセス回数はRETRY_NUMで定義されている 
-    """
-    html = None
-    retrys = [i for i in range(3)]
-    for _ in retrys :
-        import http.cookiejar, random
-        jar = http.cookiejar.CookieJar()
-        jar.set_cookie(makeCookie("session-token", ""))
-        jar.set_cookie(makeCookie("PHPSESSID", "374f0bb5f7425c4c75f3c7cd0123689a"))
-        ses_rand = round(random.random())
-        if ses_rand == 0:
-          jar.set_cookie(makeCookie("PHPSESSID", "5994399_b2be5341b1a9b7c34088e962b697a261"))
-        else:
-          jar.set_cookie(makeCookie("PHPSESSID", "5994399_79083e004df24ff1c4224888c65b60be"))
-        headers = {"Accept-Language": "en-US,en;q=0.5","User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/40.0","Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Referer": "http://thewebsite.com","Connection": "keep-alive" } 
-        request = urllib.request.Request(url=url, headers=headers)
-        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
-        _TIME_OUT = 5.
-        try:
-            html = opener.open(request, timeout = _TIME_OUT).read()
-        except Exception as e:
-          print(e)
-          continue
-        break
-    if html == None:
-        return (None, None, None)
- 
-    soup = bs4.BeautifulSoup(html, "html.parser")
-    title = (lambda x:str(x.string) if x != None else 'Untitled')(soup.title )
-    return (html, title, soup)
+  """ 
+  標準のアクセス回数はRETRY_NUMで定義されている 
+  """
+  html = None
+  retrys = [i for i in range(2)]
+  for _ in retrys :
+    import http.cookiejar, random
+    jar = http.cookiejar.CookieJar()
+    jar.set_cookie(makeCookie("session-token", ""))
+    jar.set_cookie(makeCookie("PHPSESSID", "374f0bb5f7425c4c75f3c7cd0123689a"))
+    ses_rand = round(random.random())
+    if ses_rand == 0:
+      jar.set_cookie(makeCookie("PHPSESSID", "5994399_b2be5341b1a9b7c34088e962b697a261"))
+    else:
+      jar.set_cookie(makeCookie("PHPSESSID", "5994399_79083e004df24ff1c4224888c65b60be"))
+    headers = {"Accept-Language": "en-US,en;q=0.5","User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/40.0","Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Referer": "http://thewebsite.com","Connection": "keep-alive" } 
+    request = urllib.request.Request(url=url, headers=headers)
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    _TIME_OUT = 5.
+    try:
+      html = opener.open(request, timeout = _TIME_OUT).read()
+    except Exception as e:
+      print(e)
+      continue
+    break
+  if html == None:
+      return (None, None, None)
+
+  soup = bs4.BeautifulSoup(html, "html.parser")
+  title = (lambda x:str(x.string) if x != None else 'Untitled')(soup.title )
+  return (html, title, soup)
 
 def exit_gracefully(signum, frame):
   signal.signal(signal.SIGINT, original_sigint)
@@ -140,7 +139,6 @@ def analyzing(url):
       decode_urlparam = urllib.parse.unquote(urlparam)
       tags_save.append(decode_urlparam)
   
-
   for imgurl in [x for x in [img.get('src') for img in  soup.find_all('img')] if x!=None]:
     if '600x600' not in imgurl:
       continue
@@ -199,8 +197,6 @@ if __name__ == '__main__':
     """
     seed = "http://www.pixiv.net/member_illust.php?mode=medium&illust_id=60675452" 
    
-    import concurrent.futures
-    from multiprocessing import Process
    
     def save_links(links):
       """ 一応 pickleで保存　"""
@@ -234,116 +230,35 @@ if __name__ == '__main__':
       p.start()
 
 if mode == 'leveldump' or mode == 'localdump':
-        db = plyvel.DB('./tmp/pixiv_htmls', create_if_missing=True)
-        for k, raw in db:
-            if k == '___URLS___': continue
-            if raw[0] != '{': continue
-            #print(k)
-            #print(raw)
-            v = json.loads(raw)
-            tags = v['tags']
-            tag_txt = ' '.join([x.encode('utf-8') for x in tags])
-            tag_txt = re.sub('【', '', tag_txt)
-            tag_txt = re.sub('】', '', tag_txt)
-            tag_txt = tag_txt.lower()
-            print(tag_txt)
+  db = plyvel.DB('./tmp/pixiv_htmls', create_if_missing=True)
+  for k, raw in db:
+    if k == '___URLS___': continue
+      if raw[0] != '{': continue
+        v = json.loads(raw)
+        tags = v['tags']
+        tag_txt = ' '.join([x.encode('utf-8') for x in tags])
+        tag_txt = re.sub('【', '', tag_txt)
+        tag_txt = re.sub('】', '', tag_txt)
+        tag_txt = tag_txt.lower()
+        print(tag_txt)
 
 if mode == 'chaine':
-        import os
-        db = plyvel.DB('./tmp/pixiv_htmls', create_if_missing=True)
-        for k, raw in [x for x in db]:
-            if k == '___URLS___': continue
-            if raw[0] != '{': continue
-            #print(k)
-            #print(raw)
-            v = json.loads(raw)
-            tags = v['tags']
-            tag_txt = ' '.join([x.encode('utf-8') for x in tags])
-            tag_txt = re.sub('【', '', tag_txt)
-            tag_txt = re.sub('】', '', tag_txt)
-            tag_txt = tag_txt.lower()
-            #print(v)
+  db = plyvel.DB('./tmp/pixiv_htmls', create_if_missing=True)
+  for k, raw in [x for x in db]:
+    if k == '___URLS___': continue
+      if raw[0] != '{': continue
+        v = json.loads(raw)
+        tags = v['tags']
+        tag_txt = ' '.join([x.encode('utf-8') for x in tags])
+        tag_txt = re.sub('【', '', tag_txt)
+        tag_txt = re.sub('】', '', tag_txt)
+        tag_txt = tag_txt.lower()
+        #print(v)
 
-            linker = v['linker']
-            if not os.path.exists('tmp/' + linker):
-                print(linker + ' is not exists.' )
-                db.put(k, 'miss')
-            else:
-                print(linker + ' is exists.' )
-                os.system('mv tmp/'+ linker + ' cp/')
-
-import MeCab
-import math
-import json
-if mode ==  'makeidf' :
-    idf = {}
-    c = 0
-    for line in open(filename).read().split('\n'):
-        c += 1
-        line = line.strip()
-        if line == '' : continue
-        tp  = line.lower().split(' ')
-        head = tp.pop(0)
-        contents = ''.join(tp)
-        m = MeCab.Tagger ("-Owakati")
-        for t in set(m.parse(contents).strip().split(' ')):
-            if idf.get(t) == None:
-                idf[t] = 1
-            else:
-                idf[t] += 1
-
-    it = {}
-    ti = {}
-    for i, (t, n) in enumerate(sorted(list(idf.items()), key=lambda x:x[1]*-1)):
-        idf[t] = math.log( float(c)/n )
-        ti[t] = i
-        it[i] = t
-  
-    open(filename + '.idf.json', 'w').write(json.dumps(idf))
-    open(filename + '.it.json', 'w').write(json.dumps(it))
-    open(filename + '.ti.json', 'w').write(json.dumps(ti))
-    for t, w in sorted(list(idf.items()), key=lambda x:x[1]*-1):
-        print(t, w)
-
-        
-if mode ==  'makesvm' :
-    idf = json.loads(open(filename + '.idf.json').read())
-    it  = json.loads(open(filename + '.it.json').read())
-    ti  = json.loads(open(filename + '.ti.json').read())
-    import random
-    from collections import Counter
-    inputs = list([x for x in open(filename).read().split('\n') if x != ''])
-    random.shuffle(inputs)
-    for line in inputs:
-        line = line.strip()
-        if line == '' : continue
-        tp  = line.lower().split(' ')
-        head = int(float(tp.pop(0)))
-        contents = ''.join(tp)
-        m = MeCab.Tagger ("-Owakati")
-        res = []
-        if head in [1, 2, 3]:
-            print(0, end=" ")
-        elif head in [5]:
-            print(1, end=" ")
-        else: 
-            continue
-
-        for t, num in list(Counter(m.parse(contents).strip().split(' ')).items()):
-            t = t.decode('utf-8')
-            res.append([ti[t], num*idf[t]])
-        for e, l in enumerate(sorted(res, key=lambda x:x[0])):
-            if e == 0: continue
-            print(':'.join(map(str, l)), end=" ")
-        print()
-
-if mode == "dumplinear":
-    it  = json.loads(open(filename + '.it.json').read())
-    evals = [x for x in open(filename + '.model').read().split('\n') if x!='']
-    tw = {}
-    fixer = 0
-    for i, e in enumerate(evals[6:]):
-        tw[it.get(str(i+1)).encode('utf-8')] = float(e) 
-    for t, w in sorted(list(tw.items()), key=lambda x:x[1]*-1):
-        print(t,w)
-
+        linker = v['linker']
+        if not os.path.exists('tmp/' + linker):
+          print(linker + ' is not exists.' )
+          db.put(k, 'miss')
+        else:
+          print(linker + ' is exists.' )
+          os.system('mv tmp/'+ linker + ' cp/')
