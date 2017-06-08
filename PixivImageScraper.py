@@ -87,7 +87,7 @@ def exit_gracefully(signum, frame):
 """
 内側の画像を取得して保存用
 """
-def parse_img(url, imgurl, tagname):
+def parse_img(url, imgurl, tagname, title):
   import urllib.request, urllib.parse, urllib.error, random
   import http.cookiejar
   jar = http.cookiejar.CookieJar()
@@ -117,8 +117,8 @@ def parse_img(url, imgurl, tagname):
       print("ゼロエラーです", imgurl)
       continue
     open('imgs/' + linker + '.jpg', 'wb').write(con)
-    open('metas/{}.json'.format(linker), "w").write( json.dumps({'linker':linker + '.jpg', 'tags': tagname, 'url':url, 'imgurl':imgurl }) )
-    print("発見した画像", tagname, url, imgurl)
+    open('metas/{}.json'.format(linker), "w").write( json.dumps({'linker':linker + '.jpg', 'tags': tagname, 'url':url, 'title':title, 'imgurl':imgurl }) )
+    print("発見した画像", title, tagname, url, imgurl)
     break
 
 """
@@ -131,7 +131,10 @@ def analyzing(url):
     print('bs4がギブアップしました', url)
     return None
 
-  tags = soup.find_all('a')
+  tags   = soup.find_all('a')
+  # -- captions = ",".join( map(lambda x:x.string, soup.find("p", {"class" : "caption"})) )
+  # ここではJSを利用しているので取れない（取るつもり無い）
+  title    = soup.find( "title" ).string
   tags_save = []
   for tag in tags:
     urllocal = tag.get('href')
@@ -143,7 +146,7 @@ def analyzing(url):
   for imgurl in [x for x in [img.get('src') for img in  soup.find_all('img')] if x!=None]:
     if '600x600' not in imgurl:
       continue
-    parse_img(url, imgurl,','.join(tags_save))
+    parse_img(url, imgurl, ','.join(tags_save), title)
   
   tags = soup.find_all('a')
   for tag in tags:
@@ -178,15 +181,10 @@ if __name__ == '__main__':
   parser.add_argument('--active', help='spcific active thread number')
 
   args_obj = vars(parser.parse_args())
-
-  depth = (lambda x:int(x) if x else 10)( args_obj.get('depth') )
-  
-  mode = (lambda x:x if x else 'undefined')( args_obj.get('mode') )
-
-  refresh    = (lambda x:False if x=='false' else True)( args_obj.get('refresh') )
-
-  active    = (lambda x:15 if x==None else int(x) )( args_obj.get('active') )
-
+  depth    = (lambda x:int(x) if x else 10)( args_obj.get('depth') )
+  mode     = (lambda x:x if x else 'undefined')( args_obj.get('mode') )
+  refresh  = (lambda x:False if x=='false' else True)( args_obj.get('refresh') )
+  active   = (lambda x:15 if x==None else int(x) )( args_obj.get('active') )
   filename = args_obj.get('file')
 
   if mode == 'scrape' or mode == 'level':
@@ -211,6 +209,9 @@ if __name__ == '__main__':
       links = set([seed])
       
     while links != set():
+      #for l in links:
+      #  url_links = analyzing(l)
+      #continue 
       try:
         with concurrent.futures.ProcessPoolExecutor(max_workers=250) as executor:
           for url_links in executor.map(analyzing, links):
